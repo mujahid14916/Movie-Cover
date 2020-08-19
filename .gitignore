@@ -127,3 +127,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Custom
+movie_posters/*.jpg
+movie_posters/*.jpeg
+movie_posters/*.png
