@@ -132,3 +132,4 @@ dmypy.json
 movie_posters/*.jpg
 movie_posters/*.jpeg
 movie_posters/*.png
+.vscode

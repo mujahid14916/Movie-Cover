@@ -25,6 +25,7 @@ logging.basicConfig(
 POSTER_DIR = os.path.join(os.path.dirname(__file__), 'movie_posters')
 MOVIE_NAME_FORMAT = '{name}-{year}.{ext}'
 VALID_VIDEO_FORMAT = ['mkv', 'mp4', 'avi']
+ROOT_DIR_PATH = None
 GIS = GoogleImagesSearch('AIzaSyD_hdrVUehVEw9aaHzAhXqprk1LTUlJq9o', 'ab72f683c4302c915')
 
 
@@ -238,6 +239,25 @@ def movie_poster_added(movie_file):
     return False
 
 
+def get_subtitle_file(movie_file):
+    """Get Path of srt file with same name as Movie File if exists
+
+    Args:
+        movie_file (str): Movie File Path
+
+    Returns:
+        str: Path of srt if exists else None
+    """
+    file_name = movie_file.replace('\\', '/').split('/')[-1]
+    directory = os.path.dirname(movie_file)
+    file_name_without_ext = '.'.join(file_name.split('.')[:-1])
+    sub_file = file_name_without_ext + '.srt'
+    sub_path = os.path.join(directory, sub_file)
+    if os.path.isfile(sub_path):
+        return sub_path
+    return None
+
+
 def mux_movie(movie_file, cover_file):
     """Generate MKV file with added movie poster
 
@@ -245,9 +265,11 @@ def mux_movie(movie_file, cover_file):
         movie_file (str): Movie File Path
         cover_file (str): Image File Path
     """
+    sub_path = None
     full_file_name = movie_file.replace('\\', '/').split('/')[-1]
     file_name = '.'.join(full_file_name.split('.')[:-1])
     file_directory = os.path.dirname(movie_file)
+    output_filename = os.path.join(file_directory, file_name + '.mkv')
     temp_file_name = 'temp_' + file_name
     temp_file_path = os.path.join(file_directory, temp_file_name + '.mkv')
     if movie_file.endswith('.mkv'):
@@ -265,10 +287,23 @@ def mux_movie(movie_file, cover_file):
     attachment = MKVAttachment(cover_file, name='cover.jpg')
     mkv.no_attachments()
     mkv.add_attachment(attachment)
+    if ROOT_DIR_PATH != file_directory:
+        sub_path = get_subtitle_file(movie_file)
+        if sub_path:
+            mkv.add_track(MKVTrack(sub_path, track_id=0))
     mkv.mux(temp_file_path, silent=True)
     os.chmod(movie_file, stat.S_IWRITE)
     os.remove(movie_file)
-    os.rename(temp_file_path, os.path.join(file_directory, file_name + '.mkv'))
+    os.rename(temp_file_path, output_filename)
+    if sub_path:
+        # Delete SRT file After Mux
+        os.remove(sub_path)
+    # Check if directory has single file, move movie file outside and del dir
+    if ROOT_DIR_PATH != file_directory:
+        if len(os.listdir(file_directory)) == 1:
+            parent_dir = os.path.dirname(file_directory)
+            os.rename(output_filename, os.path.join(parent_dir, file_name + '.mkv'))
+            os.rmdir(file_directory)
 
 
 def update_movie_cover(movie_file, cover_file=None):
@@ -331,12 +366,15 @@ def traverse_movies_directory(directory, parent_dir='', force=False):
 def main():
     """Main function to initiate execution
     """
+    global ROOT_DIR_PATH
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--movies_directory', type=str, help='movies directory/file path', required=True)
     parser.add_argument('-f', '--force', action='store_true', help='force update')
     args = parser.parse_args()
     path = args.movies_directory
+    ROOT_DIR_PATH = path
     force = args.force
+    logging.info("-"*80)
     logging.info("Command line args:")
     logging.info("\tPath: {}".format(path))
     logging.info("\tForce Update: {}".format(force))
